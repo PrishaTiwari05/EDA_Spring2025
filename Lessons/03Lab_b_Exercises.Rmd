@@ -21,10 +21,9 @@ here()
 
 #Import data
 pm25 <- read.csv(
-  #----ENTER THE FILENAME HERE, USING THE here() PACKAGE----
+  file = here("Data/Raw/EPAair_PM25_NC2019_raw.csv"),
   stringsAsFactors = TRUE,
-  colClasses = c("Site.ID"='factor')
-)
+  colClasses = c("Site.ID"='factor'))
 
 #Fix the date
 pm25$Date <- mdy(pm25$Date)

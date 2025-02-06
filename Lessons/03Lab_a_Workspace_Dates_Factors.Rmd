@@ -3,6 +3,8 @@ title: "Lab 3b - Workspaces, Dates, and Factors"
 author: "Environmental Data Analytics | John Fay and Luana Lima "
 date: "spring 2025"
 output: pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ## Objectives
@@ -101,7 +103,7 @@ Remember formatting of dates in R:
 # An example is provided to get you started.
 # (code must be uncommented)
 today <- Sys.Date()
-format(today, format = "%B")
+format(today, format = "%y")
 #format(today, format = "")
 #format(today, format = "")
 #format(today, format = "")
@@ -132,8 +134,9 @@ date_obj_today
 
 #Ex_3 - on your own...
 str_juneteenth <- "19 June 1865"
-#date_juneteenth <- ()
-#date_juneteenth
+date_juneteenth <- dmy(str_juneteenth)
+date_juneteenth
+year(date_juneteenth)
 ```
 ### The century issue
 
@@ -205,6 +208,7 @@ dim(sites)
 
 #Convert date column to date object
 sites$date <- ymd_hms(sites$date)
+sites$date
 
 ```
 
