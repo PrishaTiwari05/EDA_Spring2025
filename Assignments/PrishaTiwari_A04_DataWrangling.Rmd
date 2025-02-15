@@ -1,6 +1,6 @@
 ---
 title: "Assignment 4: Data Wrangling (Fall 2024)"
-author: "Student Name"
+author: "Prisha"
 output: pdf_document
 geometry: margin=2.54cm
 ---
@@ -30,19 +30,41 @@ This exercise accompanies the lessons in Environmental Data Analytics on Data Wr
 2. Add the appropriate code to reveal the dimensions of the four datasets. 
 
 ```{r setup, message = FALSE}
-#1a 
+#1a Install packages
+library(tidyverse)
+library(lubridate)
+library(here)
 
-#1b 
+#1b Check WD
+here()
 
-#1c 
+#1c Reading datasets
+O3_2018_data <- read.csv(
+  file=here("Data/Raw/EPAair_O3_NC2018_raw.csv"),
+  stringsAsFactors = TRUE
+  )
+O3_2019_data <- read.csv(
+  file=here("Data/Raw/EPAair_O3_NC2019_raw.csv"),
+  stringsAsFactors = TRUE
+  )
+PM25_2018_data <- read.csv(
+  file=here("Data/Raw/EPAair_PM25_NC2018_raw.csv"),
+  stringsAsFactors = TRUE
+  )
+PM25_2019_data <- read.csv(
+  file=here("Data/Raw/EPAair_PM25_NC2019_raw.csv"),
+  stringsAsFactors = TRUE
+  )
 
-#2 
-
+#2 Dimensions
+dim(O3_2018_data)
+dim(O3_2019_data)
+dim(PM25_2018_data)
+dim(PM25_2019_data)
 
 ```
 
 >All four datasets should have the same number of columns but unique record counts (rows). Do your datasets follow this pattern?
-
 
 ## Wrangle individual datasets to create processed files.
 
@@ -55,16 +77,31 @@ This exercise accompanies the lessons in Environmental Data Analytics on Data Wr
 6. Save all four processed datasets in the Processed folder. Use the same file names as the raw files but replace "raw" with "processed".
 
 ```{r questions 3 thru 4}
-#3
+#3 Date objects
+O3_2018_data$Date <- mdy(O3_2018_data$Date)
+O3_2019_data$Date <- mdy(O3_2019_data$Date)
+PM25_2018_data$Date <- mdy(PM25_2018_data$Date)
+PM25_2019_data$Date <- mdy(PM25_2019_data$Date)
 
+#4 Select columns
+O3_2018_data_filter <- O3_2018_data %>%
+  select(Date, DAILY_AQI_VALUE, Site.Name, AQS_PARAMETER_DESC, COUNTY, SITE_LATITUDE, SITE_LONGITUDE)
+O3_2019_data_filter <- O3_2019_data %>%
+  select(Date, DAILY_AQI_VALUE, Site.Name, AQS_PARAMETER_DESC, COUNTY, SITE_LATITUDE, SITE_LONGITUDE)
+PM25_2018_data_filter <- PM25_2018_data %>%
+  select(Date, DAILY_AQI_VALUE, Site.Name, AQS_PARAMETER_DESC, COUNTY, SITE_LATITUDE, SITE_LONGITUDE)
+PM25_2019_data_filter <- PM25_2019_data %>%
+  select(Date, DAILY_AQI_VALUE, Site.Name, AQS_PARAMETER_DESC, COUNTY, SITE_LATITUDE, SITE_LONGITUDE)
 
-#4
+#5 Filling cells
+PM25_2018_data_filter$AQS_PARAMETER_DESC <- "PM2.5"
+PM25_2019_data_filter$AQS_PARAMETER_DESC <- "PM2.5"
 
-
-#5
-
-
-#6
+#6 Exporting data
+write.csv(O3_2018_data_filter, row.names = FALSE, file = "Data/Processed/EPAair_O3_NC2018_processed.csv")
+write.csv(O3_2019_data_filter, row.names = FALSE, file = "Data/Processed/EPAair_O3_NC2019_processed.csv")
+write.csv(PM25_2018_data_filter, row.names = FALSE, file = "Data/Processed/EPAair_PM25_NC2018_processed.csv")
+write.csv(PM25_2019_data_filter, row.names = FALSE, file = "Data/Processed/EPAair_PM25_NC2019_processed.csv")
 
 ```
 
@@ -97,23 +134,41 @@ This exercise accompanies the lessons in Environmental Data Analytics on Data Wr
 11. Save your processed dataset with the following file name: "EPAair_O3_PM25_NC1819_Processed.csv"
 
 ```{r questions 7 thru 11}
-#7 
+#7 Combining datasets
+Combined_EPA_data <- rbind(O3_2018_data_filter, O3_2019_data_filter, PM25_2018_data_filter, PM25_2019_data_filter)
 
+#8 Filtering data
+common_sites <- c("Linville Falls", "Durham Armory", "Leggett", "Hattie Avenue", 
+                  "Clemmons Middle", "Mendenhall School", "Frying Pan Mountain", 
+                  "West Johnston Co.", "Garinger High School", "Castle Hayne", 
+                  "Pitt Agri. Center", "Bryson City", "Millbrook School")
+filtered_site_data <- Combined_EPA_data %>%
+  filter(Site.Name %in% common_sites)
 
-#8 
+EPA.summaries <- 
+  filtered_site_data %>%
+  group_by(Date, Site.Name, AQS_PARAMETER_DESC, COUNTY) %>%
+  summarise(meanAQI = mean(DAILY_AQI_VALUE), 
+            meanLat = mean(SITE_LATITUDE), 
+            meanLong = mean(SITE_LONGITUDE),
+            .groups = "drop"
+            )
 
+parsed_data <- EPA.summaries %>%
+  mutate(Month = month(Date, label = TRUE),
+         Year = year(Date))
 
-#9
+#9 Spreading data
+spread_data <- parsed_data %>%
+  pivot_wider(names_from = AQS_PARAMETER_DESC, values_from = meanAQI, names_prefix = "AQI_")
 
+#10 Dimensions
+dim(spread_data)
 
-#10
-
-
-#11
-
+#11 Exporting data
+write.csv(spread_data, row.names = FALSE, file = "Data/Processed/EPAair_O3_PM25_NC1819_Processed.csv")
 
 ```
-
 
 ## Generate summary tables
 
@@ -123,16 +178,28 @@ This exercise accompanies the lessons in Environmental Data Analytics on Data Wr
 
 ```{r questions 12 and 13}
 
-#12
+#12 Summary dataset
+final_summary_data <- spread_data %>%
+  group_by(Site.Name, Month, Year) %>%
+  summarise(meanPM = mean(AQI_PM2.5),
+            meanO3 = mean(AQI_Ozone),
+            .groups = "drop") %>%
+  drop_na(meanO3)
 
+test_summary_data <- spread_data %>%
+  group_by(Site.Name, Month, Year) %>%
+  summarise(meanPM = mean(AQI_PM2.5),
+            meanO3 = mean(AQI_Ozone),
+            .groups = "drop") %>%
+  na.omit(meanO3)
 
 #13
-
-
+dim(final_summary_data)
+dim(test_summary_data)
 
 ```
 
 14. Why did we use the function `drop_na` rather than `na.omit`? Hint: replace `drop_na` with `na.omit` in part 12 and observe what happens with the dimensions of the summary date frame.
 
-> Answer: 
+> Answer: We use drop_na instead of na.omit because it only removes rows where Ozone AQI is missing, while still keeping rows with missing PM2.5 values. In contrast, na.omit removes any row with any missing value, leading to an unnecessary loss of data. 
 
