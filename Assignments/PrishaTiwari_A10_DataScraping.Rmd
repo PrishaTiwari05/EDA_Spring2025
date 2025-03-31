@@ -1,6 +1,6 @@
 ---
 title: "Assignment 10: Data Scraping"
-author: "Student Name"
+author: "Prisha"
 output: pdf_document
 editor_options: 
   chunk_output_type: console
@@ -26,8 +26,13 @@ This exercise accompanies the lessons in Environmental Data Analytics on data sc
 * Check your working directory
 
 ```{r 1. Project Setup, message = FALSE}
-#1 
-
+#1 Setup
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(here); here()
+library(rvest)
+library(purrr)
 
 ```
 
@@ -39,7 +44,9 @@ This exercise accompanies the lessons in Environmental Data Analytics on data sc
 Indicate this website as the as the URL to be scraped. (In other words, read the contents into an `rvest` webpage object.)
 
 ```{r set.the.scraping.website}
-#2 
+#2 Scraping website
+webpage <- read_html('https://www.ncwater.org/WUDC/app/LWSP/report.php?pwsid=03-32-010&year=2024')
+webpage
 
 ```
 
@@ -58,8 +65,27 @@ In the code chunk below scrape these values, assigning them to four separate var
 >HINT: The first value should be "Durham", the second "03-32-010", the third "Municipality", and the last should be a vector of 12 numeric values (represented as strings)".
 
 ```{r scrape.the.data}
-#3 
+#3 Scraping
+water_system_name <- webpage %>% 
+  html_node("td tr:nth-child(1) td:nth-child(2)") %>% 
+  html_text(trim = TRUE)
 
+pwsid <- webpage %>% 
+  html_node("td tr:nth-child(1) td:nth-child(5)") %>% 
+  html_text(trim = TRUE)
+
+ownership <- webpage %>% 
+  html_node("tr:nth-child(2) td:nth-child(4)") %>% 
+  html_text(trim = TRUE)
+
+max_day_use <- webpage %>% 
+  html_nodes("th~ td+ td , th~ td+ td") %>% 
+  html_text(trim = TRUE)
+
+water_system_name
+pwsid
+ownership
+max_day_use
 
 ```
 
@@ -73,11 +99,26 @@ In the code chunk below scrape these values, assigning them to four separate var
 5. Create a line plot of the maximum daily withdrawals across the months for 2024, making sure, the months are presented in proper sequence.
 
 ```{r create.a.dataframe.from.scraped.data}
-#4 
+#4 Dataframe
+df_webpage <- data.frame("Month" = rep(1:12),
+                             "Year" = rep(2024,12),
+                             "Max_Day_Use" = as.numeric(max_day_use))
 
+df_webpage <- df_webpage %>% 
+  mutate(WaterSystemName = !!water_system_name,
+         Ownership = !!ownership,
+         PWSID = !!pwsid,
+         Date = my(paste(Month,"-",Year)))
 
-#5 
-
+#5 Plot
+ggplot(df_webpage,aes(x=Date,y=Max_Day_Use)) + 
+  geom_line() + 
+  geom_smooth(method="loess",se=FALSE) +
+  labs(title = paste("2024 Max Day Use for",water_system_name),
+       subtitle = ownership,
+       y="Max Day Use (MGD)",
+       x="Date") +
+  theme_minimal()
 
 ```
 
@@ -89,24 +130,90 @@ In the code chunk below scrape these values, assigning them to four separate var
 
 
 ```{r construct.a.scraping.function}
-#6. 
+#6. Automation
+scrape_lwsp <- function(the_year, the_pwsid) {
+  
+  #Read the webpage
+  the_website <- read_html(paste0(
+    'https://www.ncwater.org/WUDC/app/LWSP/report.php?pwsid=',
+    the_pwsid, '&year=', the_year))
+  
+  #Use your working selectors
+  the_system_name <- the_website %>% 
+    html_node("td tr:nth-child(1) td:nth-child(2)") %>% 
+    html_text(trim = TRUE)
+  
+  the_pwsid_text <- the_website %>% 
+    html_node("td tr:nth-child(1) td:nth-child(5)") %>% 
+    html_text(trim = TRUE)
+  
+  the_ownership <- the_website %>% 
+    html_node("tr:nth-child(2) td:nth-child(4)") %>% 
+    html_text(trim = TRUE)
+  
+  max_day_use <- the_website %>% 
+    html_nodes("th~ td+ td , th~ td+ td") %>% 
+    html_text(trim = TRUE) %>% 
+    as.numeric()
+  
+  #Build a data frame
+  df_max_use <- data.frame(
+    Month = 1:12,
+    Year = rep(the_year, 12),
+    Max_Day_Use_MGD = max_day_use
+  ) %>%
+    mutate(
+      Water_System = the_system_name,
+      PWSID = the_pwsid_text,
+      Ownership = the_ownership,
+      Date = as.Date(paste(Year, Month, "01", sep = "-"))
+    )
+  
+  return(df_max_use)
+}
 
-
+#Test
+durham_2024 <- scrape_lwsp(2024, "03-32-010")
+view(durham_2024)
 ```
 
 7. Use the function above to extract and plot max daily withdrawals for Durham (PWSID='03-32-010') for each month in 2020
 
 ```{r fetch.and.plot.Durham.2020.data}
-#7 
+#7 Use of automation
+durham_2020 <- scrape_lwsp(2020, "03-32-010")
 
+ggplot(durham_2020, aes(x = Date, y = Max_Day_Use_MGD)) +
+  geom_line() +
+  geom_smooth(method="loess",se=FALSE) +
+  labs(
+    title = "Max Daily Withdrawals for Durham (2020)",
+    x = "Month",
+    y = "Max Daily Use (MGD)"
+  ) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+  theme_minimal()
 
 ```
 
 8. Use the function above to extract data for Asheville (PWSID = '01-11-010') in 2020. Combine this data with the Durham data collected above and create a plot that compares Asheville's to Durham's water withdrawals.
 
 ```{r fetch.and.plot.Asheville.2020.data}
-#8 
+#8 Combined data
+asheville_2020 <- scrape_lwsp(2020, "01-11-010")
+combined_data <- bind_rows(durham_2020, asheville_2020)
 
+ggplot(combined_data, aes(x = Date, y = Max_Day_Use_MGD, color = Water_System)) +
+  geom_line() +
+  geom_smooth(method="loess",se=FALSE) +
+  labs(
+    title = "Comparison of Max Daily Withdrawals (2020)",
+    x = "Month",
+    y = "Max Daily Use (MGD)",
+    color = "Water System"
+  ) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
+  theme_minimal()
 
 ```
 
@@ -116,11 +223,24 @@ In the code chunk below scrape these values, assigning them to four separate var
 > TIP: See Section 3.2 in the "10_Data_Scraping.Rmd" where we apply "map2()" to iteratively run a function over two inputs. Pipe the output of the map2() function to `bindrows()` to combine the dataframes into a single one, and use that to construct your plot.
 
 ```{r fetch.and.plot.Asheville.multiyear.data }
-#9 
+#9 Repeated automation
+years <- 2018:2023
+pwsids <- rep("01-11-010", length(years))
 
+asheville_multi_year <- map2_dfr(years, pwsids, scrape_lwsp)
+
+ggplot(asheville_multi_year, aes(x = Date, y = Max_Day_Use_MGD)) +
+  geom_line() +
+  geom_smooth(method = "loess", se = FALSE, color = "black", linewidth = 1.2) +
+  labs(
+    title = "Asheville Max Daily Withdrawals (2018–2023)",
+    x = "Year",
+    y = "Max Daily Use (MGD)"
+  ) +
+  theme_minimal()
 
 ```
 
 Question: Just by looking at the plot (i.e. not running statistics), does Asheville have a trend in water usage over time?
-> Answer:
->
+
+> Answer: Yes, just by looking at the plot, Asheville appears to show a slight upward trend in water usage from 2018 to 2023. The smoothed loess line suggests an overall gradual increase in maximum daily withdrawals over time, even though there’s noticeable month-to-month variability.
